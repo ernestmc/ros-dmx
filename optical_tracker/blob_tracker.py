@@ -1,8 +1,10 @@
 import cv2
 import numpy as np
+import rospy
+from geometry_msgs.msg import Point
 
 
-class Target:
+class BlobTracker(object):
 
     def __init__(self, video_id):
         self.capture = cv2.VideoCapture(video_id)
@@ -16,19 +18,25 @@ class Target:
         cv2.namedWindow(self.MAIN_WINDOW)
         cv2.namedWindow(self.MASK_WINDOW)
         cv2.setMouseCallback(self.MAIN_WINDOW, self.on_mouse_event)
+        self.rate = rospy.Rate(30)
+        self.publisher = rospy.Publisher("~/position", Point, queue_size=10)
 
     def run(self):
         running = True
-        while running:
+        while not rospy.is_shutdown():
             ret, frame = self.capture.read()
             image = cv2.GaussianBlur(frame,(5,5),0)
             self.update_image(image)
+            blob = None
             if self.key_color is not None:
                 mask = self.filter_image(self.latest_image_hsv, self.key_color, (30, 50, 50))
                 mask = cv2.dilate(mask, None, 18)
                 mask = cv2.erode(mask, None, 10)
-                self.detect_blob(mask)
+                blob = self.detect_blob(mask)
                 #self.update_mask(mask)
+            if blob is not None:
+                self.publish_position(blob[0], blob[1], blob[2])
+            self.rate.sleep()
             # Listen for ESC key
             c = cv2.waitKey(10) % 0x100
             if c == 27:
@@ -72,24 +80,17 @@ class Target:
         # Draw detected blobs as red circles.
         # cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS ensures the size of the circle corresponds to the size of blob
         #im_with_keypoints = cv2.drawKeypoints(image, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+        center = None
+        radius = None
         if blob is not None:
             center = (int(blob.pt[0]), int(blob.pt[1]))
             radius = int(blob.size / 2.0)
             cv2.circle(pimage, center, radius, (255, 255, 255), 3)
         im_with_keypoints = pimage
         cv2.imshow(self.MASK_WINDOW, im_with_keypoints)
-
-    def clip_color(self, min, max, color):
-        clipped_color = []
-        for c in color:
-            if c < min:
-                clipped_color.append(min)
-            else:
-                if c > max:
-                    clipped_color.append(max)
-                else:
-                    clipped_color.append(c)
-        return clipped_color
+        if blob is None:
+            return None
+        return [blob.pt[0], blob.pt[1], blob.size]
 
     def create_detector(self):
         # Setup SimpleBlobDetector parameters.
@@ -112,7 +113,11 @@ class Target:
         params.minInertiaRatio = 0.01
         return cv2.SimpleBlobDetector(params)
 
+    def publish_position(self, x, y, z):
+        self.publisher.publish(Point(x, y, z))
 
-if __name__=="__main__":
-    t = Target(0)
-    t.run()
+
+if __name__ == '__main__':
+  rospy.init_node("blob_tracker")
+  node = BlobTracker(0)
+  node.run()
