@@ -1,54 +1,40 @@
-import serial
-import termios
-import fcntl
-import time
-
 import rospy
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Point
+from dmx_driver.srv import SetChannel, SetChannelRequest
 
-global datum
 
-def receive(data):
-  global datum
-  print data
-  datum = (data.linear.x + 1) / 2 * 255
-  print datum
-  
+class Test(object):
+  def __init__(self):
+    self.rate = rospy.Rate(10)
+    self.position_subscriber = rospy.Subscriber("/position", Point, self.position_cb)
+    self.set_channel = rospy.ServiceProxy("/set_channel", SetChannel)
 
-global pub
-rospy.init_node('cmdvel2turtlebot', anonymous=True)
-rospy.Subscriber("/cmd_vel", Twist, receive)
+  def position_cb(self, data):
+    x = 128 - (data.x - 320) * 20 / 320
+    y = 128 - (data.y - 240) * 40 / 240 - 64
+    z = 255 - data.z * 4
+    if z < 0:
+      z = 0
+    if z > 255:
+      z = 255
+    self.set_dmx(int(x), int(y), int(z))
 
-TIOCSBRK = getattr(termios, 'TIOCSBRK', 0x5427)
-TIOCCBRK = getattr(termios, 'TIOCCBRK', 0x5428)
+  def set_dmx(self, x, y, z):
+    print x, y, z
+    self.set_channel(SetChannelRequest(1, x))
+    self.set_channel(SetChannelRequest(3, y))
+    self.set_channel(SetChannelRequest(6, z / 4))
 
-BAUD_RATE = 250e3
+  def run(self):
+    # open shutter
+    self.set_channel(7, 255)
+    # dimmer
+    self.set_channel(6, 10)
+    while not rospy.is_shutdown():
+      self.rate.sleep()
 
-comport = serial.Serial("/dev/ttyUSB0", baudrate=BAUD_RATE, stopbits=serial.STOPBITS_TWO)
 
-data = chr(0) + chr(128) + chr(0) + chr(128) + chr(0) * 508
-
-a = 0
-d = 1
-datum = 0
-while 1:
-  #a = a + d
-  #if a == 128 or a == 0:
-  #  d = -d
-  a = int(datum)
-  if a > 255:
-    a = 255
-  if a < 0:
-    a = 0
-  print a
-  data = chr(0) + chr(a) + chr(0) * 510
-  # Control manual del break
-  fcntl.ioctl(comport.fd, TIOCSBRK)
-  time.sleep(100/1e6)
-  fcntl.ioctl(comport.fd, TIOCCBRK)
-  time.sleep(100/1e6)
-  comport.write(data)
-  #time.sleep(0.01)
-  rospy.sleep(0.01)
-
-comport.close()
+if __name__ == '__main__':
+  rospy.init_node("test")
+  node = Test()
+  node.run()
