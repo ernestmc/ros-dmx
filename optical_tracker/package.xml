@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package>
+  <name>optical_tracker</name>
+  <version>0.0.0</version>
+  <description>Optical blob tracker</description>
+
+  <maintainer email="ernesto@todo.todo">ernesto</maintainer>
+
+
+  <!-- One license tag required, multiple allowed, one license per tag -->
+  <!-- Commonly used license strings: -->
+  <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
+  <license>TODO</license>
+
+
+  <run_depend>rospy</run_depend>
+  <run_depend>geometry_msgs</run_depend>
+  <run_depend>cv2</run_depend>
+  <run_depend>numpy</run_depend>
+  <run_depend>dmx_driver</run_depend>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+</package>

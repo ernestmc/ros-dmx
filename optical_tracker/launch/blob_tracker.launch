@@ -1,0 +1,6 @@
+<launch>
+
+  <node name="dmx_driver" pkg="dmx_driver" type="driver.py" />
+  <node name="blob_tracker" pkg="optical_tracker" type="blob_tracker.py" />
+  
+</launch>
