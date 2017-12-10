@@ -142,6 +142,7 @@ include_directories(
 ## in contrast to setup.py, you can choose the destination
 install(PROGRAMS
   src/blob_tracker.py
+  src/calib.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

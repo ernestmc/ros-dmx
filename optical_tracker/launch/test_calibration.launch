@@ -1,0 +1,7 @@
+<launch>
+
+  <node name="dmx_driver" pkg="dmx_driver" type="driver.py" output="screen" />
+  <!-- node name="blob_tracker" pkg="optical_tracker" type="blob_tracker.py" output="screen" /-->
+  <node name="test_calibration" pkg="optical_tracker" type="calib.py" output="screen" />
+  
+</launch>
