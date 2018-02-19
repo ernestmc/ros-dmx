@@ -87,7 +87,7 @@ class BlobTracker(object):
         if blob is not None:
             center = (int(blob.pt[0]), int(blob.pt[1]))
             radius = int(blob.size / 2.0)
-            cv2.circle(pimage, center, radius, (255, 255, 255), 3)
+            cv2.circle(pimage, center, radius, (128, 128, 128), 3)
         im_with_keypoints = pimage
         cv2.imshow(self.MASK_WINDOW, im_with_keypoints)
         if blob is None:
@@ -113,7 +113,14 @@ class BlobTracker(object):
         # Filter by Inertia
         params.filterByInertia = False
         params.minInertiaRatio = 0.01
-        return cv2.SimpleBlobDetector(params)
+        ## check opencv version and construct the detector
+        is_cv3 = cv2.__version__.startswith("3.")
+        if is_cv3:
+            detector = cv2.SimpleBlobDetector_create(params)
+        else:
+            detector = cv2.SimpleBlobDetecto(params)
+
+        return detector
 
     def publish_position(self, x, y, z):
         self.publisher.publish(Point(x, y, z))
