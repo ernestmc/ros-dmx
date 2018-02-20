@@ -5,8 +5,13 @@ import pygame
 import math
 from pygame import key
 from geometry_msgs.msg import Point
-from dmx_driver.srv import SetChannel, SetChannelRequest
+from dmx_msgs.srv import GetChannel, GetChannelRequest
 from widgets import PanGauge, TiltGauge
+
+DEGREES_PER_PAN = 540 / 255
+DEGREES_PER_TILT = 270 / 255
+RADIANS_PER_PAN = DEGREES_PER_PAN * math.pi / 180
+RADIANS_PER_TILT = DEGREES_PER_TILT * math.pi / 180
 
 class Calibration(object):
     def __init__(self):
@@ -21,23 +26,25 @@ class Calibration(object):
         }
         self.screen = pygame.display.get_surface()
         #self.position_subscriber = rospy.Subscriber("/position", Point, self.position_cb)
-        #self.set_channel = rospy.ServiceProxy("/set_channel", SetChannel)
+        self.get_channel = rospy.ServiceProxy("/get_channel", GetChannel)
 
     def calibrate(self):
         pan = 0
         tilt = 0
-        print "Calibrating..."
+        print "Calibrating... Press ESC to end."
         inc_pan = 0.05
         inc_tilt = 0.05
         while not rospy.is_shutdown():
             pygame.event.pump()
             keys = key.get_pressed()
-            pan = pan + inc_pan
-            if pan > math.pi or pan < 0:
-                inc_pan = -inc_pan
-            tilt = tilt + inc_tilt
-            if tilt > math.pi or tilt < 0:
-                inc_tilt = -inc_tilt
+            # pan = pan + inc_pan
+            # if pan > math.pi or pan < 0:
+            #     inc_pan = -inc_pan
+            # tilt = tilt + inc_tilt
+            # if tilt > math.pi or tilt < 0:
+            #     inc_tilt = -inc_tilt
+            pan = self.get_normalized_pan()
+            tilt = self.get_normalized_tilt()
             self.screen.fill(pygame.Color(0, 0, 0))
             self.widgets['pan'].set_pan(pan)
             self.widgets['pan'].draw(self.screen, 0, 0)
@@ -49,18 +56,25 @@ class Calibration(object):
             self.rate.sleep()
 
     def run(self):
-        print "Starting calibration..."
-        while not rospy.is_shutdown():
-            pygame.event.pump()
-            keys = key.get_pressed()
-            if keys[pygame.K_c]:
-                self.calibrate()
-            self.rate.sleep()
+        #print "Press C to start calibration."
+        #while not rospy.is_shutdown():
+        #    pygame.event.pump()
+        #    keys = key.get_pressed()
+        #    if keys[pygame.K_c]:
+        self.calibrate()
+        #    self.rate.sleep()
 
     def position_cb(self, point):
         assert(isinstance(point, Point))
         self.latest_point = point
 
+    def get_normalized_pan(self):
+        pan = self.get_channel(1).value * DEGREES_PER_PAN + 180
+        return pan * math.pi / 180
+
+    def get_normalized_tilt(self):
+        tilt = -self.get_channel(3).value * DEGREES_PER_TILT + 45 + 90
+        return tilt * math.pi / 180
 
 if __name__ == '__main__':
   rospy.init_node("test_calibration")
