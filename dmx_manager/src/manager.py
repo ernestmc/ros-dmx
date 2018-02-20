@@ -2,7 +2,7 @@
 
 import rospy
 from geometry_msgs.msg import Point
-from dmx_driver.srv import SetChannel, SetChannelResponse
+from dmx_msgs.srv import SetChannel, SetChannelResponse, GetChannel, GetChannelResponse
 from dmx_msgs.msg import DmxFrame
 
 
@@ -13,7 +13,8 @@ class DmxManager(object):
     self.position_subscriber = rospy.Subscriber("/position", Point, self.position_cb)
     self.dmx_frame_publisher = rospy.Publisher('/dmx_frame', DmxFrame, queue_size=10)
     self.services = [
-      rospy.Service("set_channel", SetChannel, self.set_channel_srv_cb)
+      rospy.Service("set_channel", SetChannel, self.set_channel_srv_cb),
+      rospy.Service("get_channel", GetChannel, self.get_channel_srv_cb)
     ]
 
   def zero_dmx_frame(self):
@@ -28,6 +29,11 @@ class DmxManager(object):
     self.set_channel(req.channel, req.value)
     return SetChannelResponse()
 
+  def get_channel_srv_cb(self, req):
+    resp = GetChannelResponse()
+    resp.value = self.get_channel(req.channel)
+    return resp
+
   def set_channel(self, channel, value):
     """
     Set a channel to a specific value.
@@ -41,6 +47,19 @@ class DmxManager(object):
     elif channel < 0:
       channel = 0
     self.dmx_frame[channel] = value
+
+  def get_channel(self, channel):
+    """
+    Get the current value of a channel.
+    :param channel: A channel value in the range [1; 512]
+    :return: 8 bit value for that channel
+    """
+    channel -= 1
+    if channel > 511:
+      channel = 511
+    elif channel < 0:
+      channel = 0
+    return self.dmx_frame[channel]
 
   def position_cb(self, data):
     x = 128 - (data.x - 320) * 20 / 320

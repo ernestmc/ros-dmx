@@ -5,7 +5,7 @@ import termios
 import fcntl
 import time
 import rospy
-from dmx_driver.msg import DmxFrame
+from dmx_msgs.msg import DmxFrame
 
 
 class DmxDriver(object):
