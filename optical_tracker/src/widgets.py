@@ -24,7 +24,7 @@ class PanGauge(object):
         color = self.colors['marker']
         start = [x + self.width / 2, y + self.height]
         radius = self.width / 2
-        end = [start[0] + math.cos(self.angle) * radius, start[1] - math.sin(self.angle) * radius]
+        end = [start[0] - math.cos(self.angle + math.pi/2) * radius, start[1] - math.sin(self.angle + math.pi/2) * radius]
         pygame.draw.line(surface, color, start, end, 2)
 
     def draw_border(self, surface, x, y):
@@ -58,11 +58,11 @@ class TiltGauge(object):
     def draw(self, surface, x=0, y=0):
         # type: (pygame.Surface, int, int) -> None
         self.draw_border(surface, x, y)
-        self.draw_text(surface, x + 5, y + 5, 'Pan: %d' % math.ceil(math.degrees(self.angle)))
+        self.draw_text(surface, x + 5, y + 5, 'Tilt: %d' % math.ceil(math.degrees(self.angle)))
         color = self.colors['marker']
         start = [x + self.width, y + self.height / 2]
         radius = self.height / 2
-        end = [start[0] + math.cos(self.angle + math.pi/2) * radius, start[1] - math.sin(self.angle + math.pi/2) * radius]
+        end = [start[0] + math.cos(self.angle + math.pi) * radius, start[1] + math.sin(self.angle + math.pi) * radius]
         pygame.draw.line(surface, color, start, end, 2)
 
     def draw_border(self, surface, x, y):

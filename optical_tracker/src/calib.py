@@ -3,13 +3,14 @@
 import rospy
 import pygame
 import math
+import numpy as np
 from pygame import key
 from geometry_msgs.msg import Point
 from dmx_msgs.srv import GetChannel, GetChannelRequest
 from widgets import PanGauge, TiltGauge
 
-DEGREES_PER_PAN = 540 / 255
-DEGREES_PER_TILT = 270 / 255
+DEGREES_PER_PAN = 540.0 / 255
+DEGREES_PER_TILT = 270.0 / 255
 RADIANS_PER_PAN = DEGREES_PER_PAN * math.pi / 180
 RADIANS_PER_TILT = DEGREES_PER_TILT * math.pi / 180
 
@@ -29,12 +30,17 @@ class Calibration(object):
         self.get_channel = rospy.ServiceProxy("/get_channel", GetChannel)
 
     def calibrate(self):
-        pan = 0
-        tilt = 0
-        print "Calibrating... Press ESC to end."
-        inc_pan = 0.05
-        inc_tilt = 0.05
+        print "Calibrating..."
+        pass
+
+    def run(self):
+        print "\nCalibration program.\n"
+        print "Press 'c' to enter a calibration point.\n\n"
         while not rospy.is_shutdown():
+            # update gauges
+            norm_pan_rad = math.radians(self.normalize_pan(self.get_pan()))
+            norm_tilt_rad = math.radians(self.normalize_tilt(self.get_tilt()))
+            self.update_display(norm_pan_rad, norm_tilt_rad)
             pygame.event.pump()
             keys = key.get_pressed()
             # pan = pan + inc_pan
@@ -55,15 +61,6 @@ class Calibration(object):
                 return
             self.rate.sleep()
 
-    def run(self):
-        #print "Press C to start calibration."
-        #while not rospy.is_shutdown():
-        #    pygame.event.pump()
-        #    keys = key.get_pressed()
-        #    if keys[pygame.K_c]:
-        self.calibrate()
-        #    self.rate.sleep()
-
     def position_cb(self, point):
         assert(isinstance(point, Point))
         self.latest_point = point
@@ -72,9 +69,6 @@ class Calibration(object):
         pan = self.get_channel(1).value * DEGREES_PER_PAN + 180
         return pan * math.pi / 180
 
-    def get_normalized_tilt(self):
-        tilt = -self.get_channel(3).value * DEGREES_PER_TILT + 45 + 90
-        return tilt * math.pi / 180
 
 if __name__ == '__main__':
   rospy.init_node("test_calibration")

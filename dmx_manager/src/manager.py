@@ -42,11 +42,8 @@ class DmxManager(object):
     :return: None
     """
     channel -= 1
-    if channel > 511:
-      channel = 511
-    elif channel < 0:
-      channel = 0
-    self.dmx_frame[channel] = value
+    if channel >= 0 and channel < 512:
+      self.dmx_frame[channel] = value
 
   def get_channel(self, channel):
     """
@@ -55,11 +52,10 @@ class DmxManager(object):
     :return: 8 bit value for that channel
     """
     channel -= 1
-    if channel > 511:
-      channel = 511
-    elif channel < 0:
-      channel = 0
-    return self.dmx_frame[channel]
+    if channel >= 0 and channel < 512:
+      return self.dmx_frame[channel]
+    else:
+      return None
 
   def position_cb(self, data):
     x = 128 - (data.x - 320) * 20 / 320
