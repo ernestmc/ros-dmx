@@ -6,9 +6,15 @@ import math
 import numpy as np
 from pygame import key
 from geometry_msgs.msg import Point
-from dmx_msgs.srv import GetChannel, GetChannelRequest
+from sensor_msgs.msg import Joy
+from dmx_msgs.srv import GetChannel, SetChannel
 from widgets import PanGauge, TiltGauge
+from threading import RLock
 
+PAN_CHANNEL = 1
+PAN_INCREMENT = 1
+TILT_CHANNEL = 3
+TILT_INCREMENT = 1
 DEGREES_PER_PAN = 540.0 / 255
 DEGREES_PER_TILT = 270.0 / 255
 RADIANS_PER_PAN = DEGREES_PER_PAN * math.pi / 180
@@ -20,6 +26,8 @@ class Calibration(object):
         display_info = pygame.display.Info()
         pygame.display.set_mode([display_info.current_w / 2, display_info.current_h / 2])
         self.rate = rospy.Rate(10)
+        self.cal_xy_points = []
+        self.cal_pt_points = []
         self.latest_point = Point()
         self.calib_mat = []
         self.widgets = {
@@ -27,8 +35,13 @@ class Calibration(object):
             'tilt': TiltGauge(100, 200)
         }
         self.screen = pygame.display.get_surface()
-        #self.position_subscriber = rospy.Subscriber("/position", Point, self.position_cb)
+        self.position_subscriber = rospy.Subscriber("/position", Point, self.position_cb)
+        self.joystick_subscriber = rospy.Subscriber("/joy", Joy, self.joystick_cb)
         self.get_channel = rospy.ServiceProxy("/get_channel", GetChannel)
+        self.set_channel = rospy.ServiceProxy("/set_channel", SetChannel)
+        self.lock = RLock()
+        self.panning = 0
+        self.tilting = 0
 
     def calibrate(self):
         print "Calibrating..."
@@ -46,27 +59,41 @@ class Calibration(object):
             self.update_display(norm_pan_rad, norm_tilt_rad)
             pygame.event.pump()
             keys = key.get_pressed()
-            # pan = pan + inc_pan
-            # if pan > math.pi or pan < 0:
-            #     inc_pan = -inc_pan
-            # tilt = tilt + inc_tilt
-            # if tilt > math.pi or tilt < 0:
-            #     inc_tilt = -inc_tilt
-            pan = self.get_normalized_pan()
-            tilt = self.get_normalized_tilt()
-            self.screen.fill(pygame.Color(0, 0, 0))
-            self.widgets['pan'].set_pan(pan)
-            self.widgets['pan'].draw(self.screen, 0, 0)
-            self.widgets['tilt'].set_tilt(tilt)
-            self.widgets['tilt'].draw(self.screen, 200, 0)
-            pygame.display.flip()
-            if keys[pygame.K_ESCAPE]:
-                return
+            if keys[pygame.K_c]:
+                point = self.latest_point
+                if self.is_point_valid(point.x, point.y, norm_pan_rad, norm_tilt_rad):
+                    self.add_cal_point(point.x, point.y, norm_pan_rad, norm_tilt_rad)
+            if keys[pygame.K_x]:
+                self.calibrate()
+            if self.panning:
+                self.increment_channel(PAN_CHANNEL, self.panning)
+            if self.tilting:
+                self.increment_channel(TILT_CHANNEL, self.tilting)
             self.rate.sleep()
 
     def position_cb(self, point):
         assert(isinstance(point, Point))
         self.latest_point = point
+
+    def joystick_cb(self, joy):
+        # type: (Joy)->None
+        self.panning = joy.axes[0] * PAN_INCREMENT
+        self.tilting = joy.axes[1] * TILT_CHANNEL
+
+    def increment_channel(self, channel, increment):
+        val = self.get_channel(channel).value
+        val += increment
+        if val < 0:
+            val = 0
+        if val > 255:
+            val = 255
+        self.set_channel(channel, val)
+
+    def get_pan(self):
+        return self.get_channel(1).value
+
+    def get_tilt(self):
+        return self.get_channel(3).value
 
     def normalize_pan(self, pan):
         norm_pan = - pan * DEGREES_PER_PAN + 360
