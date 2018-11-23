@@ -3,6 +3,7 @@
 import rospy
 import pygame
 import math
+import time
 import numpy as np
 from pygame import key
 from geometry_msgs.msg import Point
@@ -15,6 +16,7 @@ PAN_CHANNEL = 1
 PAN_INCREMENT = 1
 TILT_CHANNEL = 3
 TILT_INCREMENT = 1
+DIMMER_CHANNEL = 6
 DEGREES_PER_PAN = 540.0 / 255
 DEGREES_PER_TILT = 270.0 / 255
 RADIANS_PER_PAN = DEGREES_PER_PAN * math.pi / 180
@@ -29,7 +31,8 @@ class Calibration(object):
         self.cal_xy_points = []
         self.cal_pt_points = []
         self.latest_point = Point()
-        self.calib_mat = []
+        self.last_joy = Joy()
+        self.calib_mat = None
         self.widgets = {
             'pan': PanGauge(200, 100),
             'tilt': TiltGauge(100, 200)
@@ -42,43 +45,84 @@ class Calibration(object):
         self.lock = RLock()
         self.panning = 0
         self.tilting = 0
+        self.reset_pose()
 
     def calibrate(self):
         print "Calibrating..."
         x, position = self.calculate_transform_matrix(self.cal_xy_points, self.cal_pt_points)
+        self.calib_mat = x
         print "Calibrated matrix: %s" % x
+        print
         print "Position: %s" % position
+        print
 
     def run(self):
         print "\nCalibration program.\n"
         print "Press 'c' to enter a calibration point.\n\n"
         while not rospy.is_shutdown():
             # update gauges
-            norm_pan_rad = math.radians(self.normalize_pan(self.get_pan()))
-            norm_tilt_rad = math.radians(self.normalize_tilt(self.get_tilt()))
-            self.update_display(norm_pan_rad, norm_tilt_rad)
+            pan_rad = math.radians(self.pan_to_deg(self.get_pan()))
+            tilt_rad = math.radians(self.tilt_to_deg(self.get_tilt()))
+            self.update_display(pan_rad, tilt_rad)
             pygame.event.pump()
             keys = key.get_pressed()
-            if keys[pygame.K_c]:
+            if keys[pygame.K_c] or (len(self.last_joy.buttons) > 0 and self.last_joy.buttons[0]):
                 point = self.latest_point
-                if self.is_point_valid(point.x, point.y, norm_pan_rad, norm_tilt_rad):
-                    self.add_cal_point(point.x, point.y, norm_pan_rad, norm_tilt_rad)
-            if keys[pygame.K_x]:
+                if self.is_point_valid(point.x, point.y, pan_rad, tilt_rad):
+                    self.add_cal_point(point.x, point.y, pan_rad, tilt_rad)
+                time.sleep(1)
+            if keys[pygame.K_x] or (len(self.last_joy.buttons) > 8 and self.last_joy.buttons[9]):
                 self.calibrate()
+                time.sleep(1)
+            if keys[pygame.K_l] or (len(self.last_joy.buttons) > 7 and self.last_joy.buttons[8]):
+                self.calib_mat = None
+                self.cal_pt_points = []
+                self.cal_xy_points = []
+                time.sleep(1)
             if self.panning:
                 self.increment_channel(PAN_CHANNEL, self.panning)
             if self.tilting:
                 self.increment_channel(TILT_CHANNEL, self.tilting)
+
+            if self.calib_mat is not None:
+                pt = self.transform_xy_to_pt(self.latest_point.x, self.latest_point.y)
+                pt = np.rad2deg(pt)
+                pt = pt.tolist()[0]
+                print pt
+                pan_estimate = self.deg_to_pan(pt[0])
+                tilt_estimate = self.deg_to_tilt(pt[1])
+                print pan_estimate
+                print tilt_estimate
+                self.set_channel(PAN_CHANNEL, self.clip_byte(pan_estimate))
+                self.set_channel(TILT_CHANNEL, self.clip_byte(tilt_estimate))
+
+            # check transforming calibrated points
+            if self.calib_mat is not None:
+                for i in range(len(self.cal_xy_points)):
+                    xy = self.cal_xy_points[i]
+                    pt = self.cal_pt_points[i]
+                    cpt = self.transform_xy_to_pt(xy[0], xy[1])
+                    print "Calibration point xy %s pt %s is converted to pan/tilt %s" % (xy, pt, cpt)
+                    print
             self.rate.sleep()
 
+    def reset_pose(self):
+        initial_pan = self.deg_to_pan(0)
+        initial_tilt = self.deg_to_tilt(0)
+        self.set_channel(DIMMER_CHANNEL, 100)
+        self.set_channel(PAN_CHANNEL, initial_pan)
+        self.set_channel(TILT_CHANNEL, initial_tilt)
+
     def position_cb(self, point):
-        assert(isinstance(point, Point))
+        # type: (Point)->None
         self.latest_point = point
 
     def joystick_cb(self, joy):
         # type: (Joy)->None
+        self.last_joy = joy
         self.panning = joy.axes[0] * PAN_INCREMENT
         self.tilting = joy.axes[1] * TILT_CHANNEL
+
 
     def increment_channel(self, channel, increment):
         val = self.get_channel(channel).value
@@ -95,19 +139,21 @@ class Calibration(object):
     def get_tilt(self):
         return self.get_channel(3).value
 
-    def normalize_pan(self, pan):
-        norm_pan = - pan * DEGREES_PER_PAN + 360
-        return norm_pan
+    def pan_to_deg(self, pan):
+        pan_deg = - pan * DEGREES_PER_PAN + 360
+        return pan_deg
 
-    def normalize_tilt(self, tilt):
-        norm_tilt = tilt * DEGREES_PER_TILT - 45
-        return norm_tilt
+    def tilt_to_deg(self, tilt):
+        tilt_deg = tilt * DEGREES_PER_TILT - 45
+        return tilt_deg
 
-    def denormalize_pan(self, normalized_pan):
-        return (normalized_pan * 180 / math.pi - 180) / DEGREES_PER_PAN
+    def deg_to_pan(self, pan_deg):
+        pan = -(pan_deg - 360) / DEGREES_PER_PAN
+        return pan
 
-    def denormalize_tilt(self, normalized_tilt):
-        return normalized_tilt * 180 / math.pi
+    def deg_to_tilt(self, tilt_deg):
+        tilt = (tilt_deg + 45) / DEGREES_PER_TILT
+        return tilt
 
     def update_display(self, pan, tilt):
         self.screen.fill(pygame.Color(0, 0, 0))
@@ -120,7 +166,7 @@ class Calibration(object):
     def add_cal_point(self, x, y, pan, tilt):
         self.cal_xy_points.append((x, y))
         self.cal_pt_points.append((pan, tilt))
-        print "Added calibration point #%s -- xy:%s pan/tilt:%s" % \
+        print "Added calibration point #%s -- xy:%s pan/tilt:%s\n" % \
               (len(self.cal_xy_points), self.cal_xy_points[-1], self.cal_pt_points[-1])
 
     def is_point_valid(self, x, y, pan, tilt):
@@ -169,6 +215,20 @@ class Calibration(object):
         position = np.array([cx0, cy0, cz0]).transpose()
         return x, position
 
+    def transform_xy_to_pt(self, x, y):
+        if self.calib_mat is not None:
+            xy = np.array([x, y, 1])
+            gxy = xy * self.calib_mat
+            rad_angle = np.arctan(gxy)
+            return rad_angle
+
+    def clip_byte(self, a):
+        b = math.floor(a)
+        if b > 255:
+            b = 255
+        if b < 0:
+            b = 0
+        return b
 
 if __name__ == '__main__':
   rospy.init_node("test_calibration")

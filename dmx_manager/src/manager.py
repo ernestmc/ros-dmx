@@ -65,7 +65,7 @@ class DmxManager(object):
       z = 0
     if z > 255:
       z = 255
-    self.set_dmx(int(x), int(y), int(z))
+    #self.set_dmx(int(x), int(y), int(z))
 
   def set_dmx(self, x, y, z):
     print x, y, z

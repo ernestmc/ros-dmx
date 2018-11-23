@@ -128,5 +128,5 @@ class BlobTracker(object):
 
 if __name__ == '__main__':
   rospy.init_node("blob_tracker")
-  node = BlobTracker(0)
+  node = BlobTracker(1)
   node.run()
