@@ -1,16 +1,17 @@
 #! /usr/bin/env python
 
 import rospy
-from geometry_msgs.msg import Point
 from dmx_msgs.srv import SetChannel, SetChannelResponse, GetChannel, GetChannelResponse
 from dmx_msgs.msg import DmxFrame
 
 
+"""
+Class that generate a 50Hz DMX frame. Also provides services to manipulate channel information in the DMX frame.
+"""
 class DmxManager(object):
   def __init__(self):
     self.rate = rospy.Rate(50)
     self.dmx_frame = [0] * 512
-    self.position_subscriber = rospy.Subscriber("/position", Point, self.position_cb)
     self.dmx_frame_publisher = rospy.Publisher('/dmx_frame', DmxFrame, queue_size=10)
     self.services = [
       rospy.Service("set_channel", SetChannel, self.set_channel_srv_cb),
@@ -20,16 +21,23 @@ class DmxManager(object):
   def zero_dmx_frame(self):
     """
     Put all channels of the DMX frame to zero.
-    :return: None
     """
     for i in range(512):
       self.dmx_frame[i] = 0
 
   def set_channel_srv_cb(self, req):
+    """
+    Callback to process set channel service requests.
+    @param req: Request message
+    """
     self.set_channel(req.channel, req.value)
     return SetChannelResponse()
 
   def get_channel_srv_cb(self, req):
+    """
+    Callback to process get channel service requests.
+    @param req: Request message
+    """
     resp = GetChannelResponse()
     resp.value = self.get_channel(req.channel)
     return resp
@@ -37,9 +45,8 @@ class DmxManager(object):
   def set_channel(self, channel, value):
     """
     Set a channel to a specific value.
-    :param channel: A channel value in the range [1; 512]
-    :param value: A value in the range [0; 255]
-    :return: None
+    @param channel: A channel value in the range [1; 512]
+    @param value: A value in the range [0; 255]
     """
     channel -= 1
     if channel >= 0 and channel < 512:
@@ -48,8 +55,8 @@ class DmxManager(object):
   def get_channel(self, channel):
     """
     Get the current value of a channel.
-    :param channel: A channel value in the range [1; 512]
-    :return: 8 bit value for that channel
+    @param channel: A channel value in the range [1; 512]
+    @return: 8 bit value for that channel
     """
     channel -= 1
     if channel >= 0 and channel < 512:
@@ -57,23 +64,10 @@ class DmxManager(object):
     else:
       return None
 
-  def position_cb(self, data):
-    x = 128 - (data.x - 320) * 20 / 320
-    y = 128 - (data.y - 240) * 40 / 240 - 64
-    z = 255 - data.z * 4
-    if z < 0:
-      z = 0
-    if z > 255:
-      z = 255
-    #self.set_dmx(int(x), int(y), int(z))
-
-  def set_dmx(self, x, y, z):
-    print x, y, z
-    self.set_channel(1, x)
-    self.set_channel(3, y)
-    self.set_channel(6, z / 4)
-
   def run(self):
+    """
+    Main loop.
+    """
     # open shutter
     self.set_channel(7, 255)
     # dimmer
@@ -83,6 +77,9 @@ class DmxManager(object):
       self.rate.sleep()
 
   def publish_dmx_frame(self):
+    """
+    Publish the DMX frame message.
+    """
     dmx_frame = DmxFrame()
     dmx_frame.frame = self.dmx_frame
     self.dmx_frame_publisher.publish(dmx_frame)

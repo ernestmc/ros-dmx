@@ -1,14 +1,19 @@
 #!/usr/bin/env python
 
 import cv2
-import numpy as np
 import rospy
 from geometry_msgs.msg import Point
 
-
+"""
+This class tracks the position of an object in the camera space.
+"""
 class BlobTracker(object):
 
     def __init__(self, video_id):
+        """
+        Initializer.
+        @param video_id: Identifier for the video device to use as input.
+        """
         self.capture = cv2.VideoCapture(video_id)
         self.key_color = None
         self.latest_mask = None
@@ -24,6 +29,9 @@ class BlobTracker(object):
         self.publisher = rospy.Publisher("~/position", Point, queue_size=10)
 
     def run(self):
+        """
+        Main loop. Execute until ESC key is pressed.
+        """
         running = True
         while not rospy.is_shutdown():
             ret, frame = self.capture.read()
@@ -35,7 +43,6 @@ class BlobTracker(object):
                 mask = cv2.dilate(mask, None, 18)
                 mask = cv2.erode(mask, None, 10)
                 blob = self.detect_blob(mask)
-                #self.update_mask(mask)
             if blob is not None:
                 self.publish_position(blob[0], blob[1], blob[2])
             self.rate.sleep()
@@ -45,21 +52,39 @@ class BlobTracker(object):
                 running = False
 
     def update_image(self, image):
+        """
+        Display image on the screen.
+        @param image: Image to display.
+        """
         self.latest_image = image
         self.latest_image_hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
         cv2.imshow(self.MAIN_WINDOW, image)
 
     def update_mask(self, mask_image):
+        """
+        Display mask image on the screen.
+        @param mask_image: Mask image to display.
+        """
         self.latest_mask = mask_image
         cv2.imshow(self.MASK_WINDOW, mask_image)
 
     def on_mouse_event(self, event, x, y, w, h):
+        """
+        Callback to process mouse events.
+        """
         if event == cv2.EVENT_LBUTTONUP:
-            #print event, x, y, w, h
             color = self.latest_image_hsv[y, x]
             self.key_color = color
 
     def filter_image(self, image, color, similarity):
+        """
+        Filter image by color.
+        @param image: Image to filter.
+        @param color: Color to filter. All pixels similar to the provided color will be masked. All other pixels will
+        be left out of the mask.
+        @param similarity: A tolerance value for the color.
+        @return: An image containing the mask.
+        """
         low_color = cv2.addWeighted(color, 1, similarity, -1, 0, dtype=cv2.CV_8U)
         high_color = cv2.addWeighted(color, 1, similarity, 1, 0, dtype=cv2.CV_8U)
         mask = cv2.inRange(image, low_color, high_color)
@@ -67,7 +92,13 @@ class BlobTracker(object):
         return mask
 
     def detect_blob(self, image):
-        # Detect blobs.
+        """
+        Given a mask image, detect blobs and estimate the coordinate of their centroid.
+        Blobs are connected areas of the image with the same color.
+        @param image: Input mask image.
+        @return: Returns a vector containing the coordinates for the centroid of the largest detected blob and
+        it's size.
+        """
         pimage = image
         dy, dx = pimage.shape
         cv2.rectangle(pimage, (0, 0), (dx-1, 10), (255, 255, 255), -1)
@@ -79,9 +110,6 @@ class BlobTracker(object):
         for k in keypoints:
             if blob is None or k.size > blob.size:
                 blob = k
-        # Draw detected blobs as red circles.
-        # cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS ensures the size of the circle corresponds to the size of blob
-        #im_with_keypoints = cv2.drawKeypoints(image, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
         center = None
         radius = None
         if blob is not None:
@@ -95,11 +123,12 @@ class BlobTracker(object):
         return [blob.pt[0], blob.pt[1], blob.size]
 
     def create_detector(self):
+        """
+        Create a detector with the appropriate parameters.
+        @return: A detector object.
+        """
         # Setup SimpleBlobDetector parameters.
         params = cv2.SimpleBlobDetector_Params()
-        # Change thresholds
-        #params.minThreshold = 10
-        #params.maxThreshold = 200
         # Filter by Area.
         params.filterByArea = True
         params.minArea = 500
@@ -123,10 +152,16 @@ class BlobTracker(object):
         return detector
 
     def publish_position(self, x, y, z):
+        """
+        Publish position information on the ros topic.
+        @param x: x coordinate
+        @param y: y coordinate
+        @param z: size of the detected blob
+        """
         self.publisher.publish(Point(x, y, z))
 
 
 if __name__ == '__main__':
   rospy.init_node("blob_tracker")
-  node = BlobTracker(1)
+  node = BlobTracker(0)
   node.run()

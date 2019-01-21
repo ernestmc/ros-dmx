@@ -22,6 +22,9 @@ DEGREES_PER_TILT = 270.0 / 255
 RADIANS_PER_PAN = DEGREES_PER_PAN * math.pi / 180
 RADIANS_PER_TILT = DEGREES_PER_TILT * math.pi / 180
 
+"""
+Class to perform the calibration procedure to map a camera space into a world coordinates.
+"""
 class Calibration(object):
     def __init__(self):
         pygame.init()
@@ -48,6 +51,9 @@ class Calibration(object):
         self.reset_pose()
 
     def calibrate(self):
+        """
+        Calculate the transformation matrix using the current calibration points.
+        """
         print "Calibrating..."
         x, position = self.calculate_transform_matrix(self.cal_xy_points, self.cal_pt_points)
         self.calib_mat = x
@@ -57,6 +63,9 @@ class Calibration(object):
         print
 
     def run(self):
+        """
+        Main loop. Update on-screen displays and capture input from the user.
+        """
         print "\nCalibration program.\n"
         print "Press 'c' to enter a calibration point.\n\n"
         while not rospy.is_shutdown():
@@ -107,6 +116,9 @@ class Calibration(object):
             self.rate.sleep()
 
     def reset_pose(self):
+        """
+        Reset project to zero position.
+        """
         initial_pan = self.deg_to_pan(0)
         initial_tilt = self.deg_to_tilt(0)
         self.set_channel(DIMMER_CHANNEL, 100)
@@ -114,10 +126,16 @@ class Calibration(object):
         self.set_channel(TILT_CHANNEL, initial_tilt)
 
     def position_cb(self, point):
+        """
+        Callback to receive the latest position information from the tracker.
+        """
         # type: (Point)->None
         self.latest_point = point
 
     def joystick_cb(self, joy):
+        """
+        Callback to receive input from the joystick.
+        """
         # type: (Joy)->None
         self.last_joy = joy
         self.panning = joy.axes[0] * PAN_INCREMENT
@@ -125,6 +143,11 @@ class Calibration(object):
 
 
     def increment_channel(self, channel, increment):
+        """
+        Increment or decrement the DMX channel value with clipping.
+        @param channel: DMX channel number to modify.
+        @param increment: Signed integer value to increment.
+        """
         val = self.get_channel(channel).value
         val += increment
         if val < 0:
@@ -134,28 +157,59 @@ class Calibration(object):
         self.set_channel(channel, val)
 
     def get_pan(self):
+        """
+        @return: Pan value
+        """
         return self.get_channel(1).value
 
     def get_tilt(self):
+        """
+        @return: Tilt value
+        """
         return self.get_channel(3).value
 
     def pan_to_deg(self, pan):
+        """
+        Convert pan value to degrees.
+        @param pan: Pan value
+        @return: Pan angle in degrees in the reference frame
+        """
         pan_deg = - pan * DEGREES_PER_PAN + 360
         return pan_deg
 
     def tilt_to_deg(self, tilt):
+        """
+        Convert tilt value to degrees.
+        @param tilt: Tilt value
+        @return: Tilt angle in degrees in the reference frame
+        """
         tilt_deg = tilt * DEGREES_PER_TILT - 45
         return tilt_deg
 
     def deg_to_pan(self, pan_deg):
+        """
+        Convert angle in degrees to pan value.
+        @param pan_deg: Pan angle in degrees in the reference frame
+        @return: Pan value
+        """
         pan = -(pan_deg - 360) / DEGREES_PER_PAN
         return pan
 
     def deg_to_tilt(self, tilt_deg):
+        """
+        Convert angle in degrees to tilt value.
+        @param tilt_deg: Tilt angle in degrees in the reference frame
+        @return: Tilt value
+        """
         tilt = (tilt_deg + 45) / DEGREES_PER_TILT
         return tilt
 
     def update_display(self, pan, tilt):
+        """
+        Update display widgets.
+        @param pan: Pan angle in degrees
+        @param tilt: Tilt angle in degrees
+        """
         self.screen.fill(pygame.Color(0, 0, 0))
         self.widgets['pan'].set_pan(pan)
         self.widgets['pan'].draw(self.screen, 0, 0)
@@ -164,6 +218,13 @@ class Calibration(object):
         pygame.display.flip()
 
     def add_cal_point(self, x, y, pan, tilt):
+        """
+        Add a calibration point to the vector.
+        @param x: current x coordinate in the video frame
+        @param y: current y coordinate in the video frame
+        @param pan: current pan value
+        @param tilt: current tilt value
+        """
         self.cal_xy_points.append((x, y))
         self.cal_pt_points.append((pan, tilt))
         print "Added calibration point #%s -- xy:%s pan/tilt:%s\n" % \
@@ -172,11 +233,11 @@ class Calibration(object):
     def is_point_valid(self, x, y, pan, tilt):
         """
         Indicates if the point pairs are valid for calibration.
-        :param x: x coordinate
-        :param y: y coordinate
-        :param pan: horizontal pan angle
-        :param tilt: vertical tilt angle
-        :return: True if points are valid, False otherwise
+        @param x: x coordinate
+        @param y: y coordinate
+        @param pan: horizontal pan angle
+        @param tilt: vertical tilt angle
+        @return: True if points are valid, False otherwise
         """
         tolerance = 0.0001
         #if np.abs(pan) < tolerance and np.abs(tilt) < tolerance:
@@ -187,9 +248,9 @@ class Calibration(object):
         """
         Given a list of (x, y) coordinates and the corresponding (pan, tilt) angles, estimate the transformation matrix.
         Uses least square to compute the best fitting matrix for the value pairs.
-        :param xy: a list of coordinate tuples [(x, y)]
-        :param pt: a list of pan and tilt angles in radians [(pan, tilt)]. Angles should be in the range (-pi/2, pi/2)
-        :return: a transformation matrix that converts (x, y) coordinates into (pan, tilt) angles.
+        @param xy: a list of coordinate tuples [(x, y)]
+        @param pt: a list of pan and tilt angles in radians [(pan, tilt)]. Angles should be in the range (-pi/2, pi/2)
+        @return: a transformation matrix that converts (x, y) coordinates into (pan, tilt) angles.
         """
         xy = np.array(xy)
         pt = np.array(pt)
@@ -216,6 +277,12 @@ class Calibration(object):
         return x, position
 
     def transform_xy_to_pt(self, x, y):
+        """
+        Apply the current calibrated matrix and convert xy points in video frame into pan-tilt values in DMX space.
+        @param x: x coordinate in video frame
+        @param y: y coordinate in video frame
+        @return: Vector containing [pan, tilt] data
+        """
         if self.calib_mat is not None:
             xy = np.array([x, y, 1])
             gxy = xy * self.calib_mat
@@ -223,6 +290,11 @@ class Calibration(object):
             return rad_angle
 
     def clip_byte(self, a):
+        """
+        Clip to 8 bit value.
+        @param a: integer
+        @return: integer clipped to positive 8 bits
+        """
         b = math.floor(a)
         if b > 255:
             b = 255
